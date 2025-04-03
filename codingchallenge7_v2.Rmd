@@ -1,0 +1,92 @@
+---
+title: "Coding Challenge7    04.03.2025"
+author: "Katie Clouse"
+date: "2025-04-03"
+output: 
+  pdf_document:
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+1. Data | Packages| as.factor variables
+```{r}
+plantemergence <- read.csv("C:/Users/katie/Downloads/PlantEmergence.csv")
+library(tidyverse)
+library(lme4)
+library(emmeans)
+library(multcomp)
+library(multcompView)
+
+plantemergence$Treatment <- as.factor(plantemergence$Treatment)
+plantemergence$DaysafterPlanting <- as.factor(plantemergence$DaysAfterPlanting)
+plantemergence$Rep <- as.factor(plantemergence$Rep)
+```
+2. Fit the Linear Model
+```{r}
+lm.interaction <- lm(Emergence ~ Treatment*DaysafterPlanting, data = plantemergence) 
+summary(lm.interaction)
+anova(lm.interaction)
+```
+3. Simplified Linear Model 
+```{r}
+simplified_lm <- lm(Emergence~Treatment + DaysafterPlanting, data = plantemergence)
+summary(simplified_lm)
+anova(simplified_lm)
+# Intercept and coefficient on treatment2: The intercept for 
+#Treatment 2 is 182.163 and this is the baseline of for the data. 
+#The coefficient is the result of adding (-134.531) to 182.163, 
+#which is 47.632. As Treatment and DaysafterPlanting increase by 1 unit, 
+#the emergence increases by 47.632.    
+```
+4. Finding Least Square Means
+```{r}
+lsmeans <- emmeans(simplified_lm, ~Treatment)
+Results_lsmeans <- cld(lsmeans, alpha = 0.05, details = TRUE)
+print(Results_lsmeans)
+
+# It provides estimated means for each of the groups. The pairwise allows 
+#you to see the statistical comparisons between groups to see if there was 
+#any significance. Based on these results, there are 8 comparisons that have
+#a pvalue of less than 0.0001.
+```
+6. Generating Plots
+```{r}
+plot_cldbars_onefactor <- function(lm_model, factor) {
+data <- lm_model$model
+variables <- colnames(lm_model$model)
+dependent_var <- variables[1]
+independent_var <- variables[2:length(variables)]
+lsmeans <- emmeans(lm_model, as.formula(paste("~", factor))) # estimate
+lsmeans
+Results_lsmeans <- cld(lsmeans, alpha = 0.05, reversed = TRUE, details =
+TRUE, Letters = letters) # contrast with Tukey adjustment by default.
+# Extracting the letters for the bars
+sig.diff.letters <- data.frame(Results_lsmeans$emmeans[,1],
+str_trim(Results_lsmeans$emmeans[,7]))
+colnames(sig.diff.letters) <- c(factor, "Letters")
+# for plotting with letters from significance test
+ave_stand2 <- lm_model$model %>%
+group_by(!!sym(factor)) %>%
+dplyr::summarize(
+ave.emerge = mean(.data[[dependent_var]], na.rm = TRUE),
+se = sd(.data[[dependent_var]]) / sqrt(n())
+) %>%
+left_join(sig.diff.letters, by = factor) %>%
+mutate(letter_position = ave.emerge + 10 * se)
+plot <- ggplot(data, aes(x = !! sym(factor), y = !! sym(dependent_var))) +
+stat_summary(fun = mean, geom = "bar") +
+stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.5) +
+ylab("Number of emerged plants") +
+geom_jitter(width = 0.02, alpha = 0.5) +
+geom_text(data = ave_stand2, aes(label = Letters, y = letter_position),
+size = 5) +
+xlab(as.character(factor)) +
+theme_classic()
+return(plot)
+}
+
+plot_cldbars_onefactor(simplified_lm, "Treatment")
+# the letters are denoting the significance of the means for different treatment levels 
+```
+[Link to my github](https://github.com/kgc0068?tab=repositories)

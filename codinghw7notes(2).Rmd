@@ -1,0 +1,146 @@
+---
+title: "CodingHW7"
+author: "Katie Clouse"
+date: "2025-04-02"
+output: 
+  pdf_document:
+---
+
+Loading Packages
+```{r}
+library(tidyverse)
+library(lme4)
+library(multcomp)
+library(ggplot2)
+```
+Intro to Regression analysis in R
+```{r}
+#we want to estimate slope, intercept, adn standard deviation. Goal is to minimize distance from line to data point also called sum of squared erros (SSE). Sum of Squares of Regression (SSR) is the distance between the best fit line and the average. These added together equates to the Total Sum of Squares. THe smaller the SSE and the higher the SSR, the lower the p-value. 
+```
+Continuous X and Continuous Y
+```{r}
+data("mtcars")
+print(mtcars)
+
+ggplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_smooth(method = lm, se = FALSE, color = "gray") +
+  geom_point(aes(color = wt)) +
+  xlab("Weight") +
+  ylab("Miles per Gallon") +
+  scale_color_gradient(low = "forestgreen", high = "black") +
+  theme_classic()
+
+
+lm1 <- lm(mpg~wt, data =mtcars)
+#y~x (dependent~independent) (criterion~predictor) 
+# use this for the linear model equation and this is a correlation. You have to use a continuous y and a continuous x variable 
+summary(lm1)
+summary(lm(mpg~wt, data = mtcars))
+
+anova(lm(mpg~wt, data = mtcars))
+
+# essentially the linear model, regression, and ANOVA are going to give you all the same values 
+
+cor.test(mtcars$wt, mtcars$mpg) #you have to spell out the variables that you want
+```
+Assumptions
+```{r}
+#Assumptions for regression, linear model, ANOVA:
+# y is continuous
+# normal distribution
+#linear relationship
+# homoskedasticity
+# sigma is consistent
+# independent samples
+
+#how we can get residuals:
+model <- lm(mpg~wt, data = mtcars)
+
+ggplot(model, aes(y= .resid, x = .fitted)) +
+  geom_point()+
+  geom_hline(yintercept = 0)
+
+```
+Messin around w bullrichness data
+```{r}
+bull.rich <- read.csv("C:/Users/katie/Downloads/Bull_richness.csv")
+library(tidyverse)
+
+bull.rich.subset <-bull.rich%>%
+  filter(GrowthStage == "V8" & Treatment == "Conv.")
+# this will show that there is a control and a fungicide treated group
+
+t.test(richness ~ Fungicide, data = bull.rich.subset)
+#null is that means would be equal to zero adn w this data, we can see that the means are not zero 
+
+summary(lm(richness~Fungicide, data = bull.rich.subset))
+
+anova(lm(richness ~Fungicide, data = bull.rich.subset))
+
+bull.rich.subset2<- bull.rich%>%
+  filter(Fungicide == "C" & Treatment == "Conv." & Crop == "Corn")
+ggplot(bull.rich.subset2, aes(x = GrowthStage, y = richness)) +
+  geom_boxplot()
+
+summary(lm(richness~GrowthStage, data = bull.rich.subset2)) #make sure you don't have spaces between the tilde and the variables bc then R will say that you have an unexpected variable 
+anova((lm(richness~GrowthStage, data = bull.rich.subset2)))
+# this says the model is a good fit 
+# after the ANOVA you would run a pairwise comparision or a post hoc
+
+library(emmeans)
+library(multcomp) #multiple comparisons
+sessionInfo()
+
+
+
+lm3 <- lm(richness~GrowthStage, data = bull.rich.subset2)
+emmeans(lm3, ~GrowthStage)
+lsmeans <- emmeans(lm3, ~GrowthStage) #lsmeans = least squared means
+#cld = compact letter display
+
+results_lsmeans <- cld(lsmeans, alpha = 0.05, details = TRUE)
+# outputs which grousp are different from the other
+```
+Looking at Interactions
+```{r}
+
+bull.rich.subset3 <- bull.rich%>%
+  filter(Treatment == "Conv." & Crop == "Corn")
+
+bull.rich.subset3$GrowthStage <- factor(bull.rich.subset3$GrowthStage, levels = c("V6", "V8", "V15"))
+
+# lm.interaction <- lm(richness ~ GrowthStage + Fungicide + GrowthStage:Fungicide))
+# this allows you to add the variables that you want to see the interaction in between but you can do this more shorthand
+
+lm.interaction <- lm(richness ~ GrowthStage*Fungicide, data = bull.rich.subset3) 
+summary(lm.interaction)
+anova(lm.interaction)
+
+lsmeans <- emmeans(lm.interaction, ~Fungicide|GrowthStage)
+#we are seeing fungicide WITHIN each growthstage
+results_lsmeans <- cld(lsmeans, alpha = 0.05, details = TRUE)
+#fungicide didnt't have an effect until v8
+
+ggplot(bull.rich.subset3, aes(x = GrowthStage, y = richness, color = Fungicide))+
+  geom_boxplot()
+```
+Mixed effects models
+```{r}
+# these have a fixed effect and a random effect. This means random effects impacts the variation in y and the fixed effects the mean in y. The variation within study design that you may not care about. You want to generalize the variation over the random effect. If you cared about the effect then you would make it a fixed effect. 
+
+library(lme4)
+
+#    lm.interaction2 <- lmer(richness ~ GrowthStage*Fungicide, data = bull.rich.subset3)
+# if you just ran the code above, it would give you an error saying that you need to specify a random effect
+
+lm.interaction2 <- lmer(richness ~ GrowthStage*Fungicide + (1|Rep), data = bull.rich.subset3)
+summary(lm.interaction2)
+summary(lm.interaction)
+# when the std. error goes down, that means you are better able to predict the means of the betas in the linear model. So you can better detect the change in treatments 
+
+lsmeans <- emmeans(lm.interaction2, ~Fungicide|GrowthStage)
+results_lsmeans <- cld(lsmeans, alpha = 0.05, details = TRUE)
+
+# we are better able to detect differences in the linear models
+```
+
